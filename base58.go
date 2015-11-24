@@ -24,45 +24,44 @@ func (c CorruptInputError) Error() string {
 var radix = big.NewInt(58)
 var zero = big.NewInt(0)
 
-// Encode encodes x using the encoding enc, writing EncodedLen(len(src)) bytes to dst.
-func (e *Encoding) EncodeBigInt(dst []byte, x *big.Int) {
-	if x.BitLen() > 64 {
-		i := len(dst)
-		for x.Cmp(zero) > 0 {
-			i--
-			mod := new(big.Int)
-			x.DivMod(x, radix, mod)
-			dst[i] = e.encode[mod.Uint64()]
-		}
-		e.pad(dst, i)
+func (e *Encoding) enc(dst []byte, x *big.Int, src []byte) []byte {
+	if dst == nil {
+		dst = make([]byte, EncodedLen(x.BitLen()))
 	}
+	i := len(dst)
+	for x.Cmp(zero) > 0 {
+		i--
+		mod := new(big.Int)
+		x.DivMod(x, radix, mod)
+		dst[i] = e.encode[mod.Uint64()]
+	}
+	if e.padChar != NoPadding {
+		for src[i] == 0x00 {
+			i--
+			dst[i] = byte(e.padChar)
+		}
+	}
+	return dst[i:]
+}
+
+// Encode encodes x using the encoding enc, writing EncodedLen(len(src)) bytes to dst.
+func (e *Encoding) EncodeBigInt(x *big.Int) []byte {
+	return e.enc(nil, new(big.Int).Set(x), x.Bytes())
 }
 
 // Encode encodes src using the encoding enc, writing EncodedLen(len(src)) bytes to dst.
 func (e *Encoding) Encode(dst, src []byte) {
-	e.EncodeBigInt(dst, new(big.Int).SetBytes(src))
-}
-
-func (e *Encoding) pad(dst []byte, i int) {
-	if e.padChar != NoPadding {
-		for j := 0; j < i && dst[j] == 0; j++ {
-			dst[j] = byte(e.padChar)
-		}
-	}
+	e.enc(dst, new(big.Int).SetBytes(src), src)
 }
 
 // EncodeBigIntToString returns the base58 encoding of x.
 func (e *Encoding) EncodeBigIntToString(x *big.Int) string {
-	dst := make([]byte, EncodedLen(x.BitLen()))
-	e.EncodeBigInt(dst, x)
-	return string(dst)
+	return string(e.EncodeBigInt(x))
 }
 
 // EncodeToString returns the base58 encoding of src.
 func (e *Encoding) EncodeToString(src []byte) string {
-	dst := make([]byte, EncodedLen(len(src)*8))
-	e.Encode(dst, src)
-	return string(dst)
+	return string(e.enc(nil, new(big.Int).SetBytes(src), src))
 }
 
 const log58 = 4.0604430105464193366005041538200881735700130482829993330423503611361744031
@@ -111,7 +110,7 @@ var RawBitcoin = Bitcoin.WithPadding(NoPadding)
 // which must be a 58-byte string. By default padding is turned off.
 func NewEncoding(encoder string) *Encoding {
 	if len(encoder) != 58 {
-		panic("encoding alphabet is not 58-bytes long")
+		panic("encoding alphabet is not 58 bytes long")
 	}
 
 	e := Encoding{padChar: StdPadding}
@@ -127,11 +126,11 @@ func NewEncoding(encoder string) *Encoding {
 }
 
 func (e *Encoding) Decode(src []byte) (*big.Int, error) {
-	n := new(big.Int)
 	j := 0
 	for ; j < len(src) && src[j] == byte(e.padChar); j++ {
 	}
 
+	n := new(big.Int)
 	for i := range src[j:] {
 		c := e.decodeMap[src[i]]
 		if c == 0xFF {
