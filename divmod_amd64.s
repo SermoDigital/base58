@@ -15,7 +15,7 @@ TEXT ·divmod(SB),NOSPLIT,$0
 	MOVQ	DX, AX
 	SHRQ	$3, AX
 
-	// some bullshit i cant use IMULQ $58, AX, DX
+	// i cant use IMULQ $58, AX, DX
 	BYTE $0x6b
 	BYTE $0xd0
 	BYTE $0x3a
